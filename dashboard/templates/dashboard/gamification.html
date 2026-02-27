@@ -1,0 +1,257 @@
+{% extends "dashboard/base.html" %}
+
+{% block page_title %}Геймификация — Соревнование классов{% endblock %}
+
+{% block content %}
+
+<div style="display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start;">
+
+  <!-- Лидерборд -->
+  <div>
+    <div class="section-header">
+      <span class="section-title">Рейтинг классов</span>
+      <div class="section-line"></div>
+      <span class="tag tag-green">Февраль 2025</span>
+    </div>
+
+    <div class="card" style="padding: 0; overflow: hidden;">
+      <!-- Заголовок -->
+      <div style="padding: 16px 24px; background: var(--bg3); border-bottom: 1px solid var(--border); display: flex; gap: 8px; align-items: center;">
+        <span style="font-size: 10px; color: var(--muted);">Экономия = (предыдущий месяц - текущий) / предыдущий × 100%</span>
+      </div>
+
+      {% for c in ratings %}
+      <div style="
+        display: grid;
+        grid-template-columns: 48px 80px 1fr 120px 100px;
+        align-items: center;
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--border);
+        gap: 16px;
+        transition: background 0.2s;
+        {% if forloop.counter == 1 %}background: rgba(0,229,160,0.04);{% endif %}
+      "
+        onmouseover="this.style.background='rgba(255,255,255,0.02)'"
+        onmouseout="this.style.background='{% if forloop.counter == 1 %}rgba(0,229,160,0.04){% else %}transparent{% endif %}'">
+
+        <!-- Место -->
+        <div style="
+          font-family: var(--display);
+          font-size: {% if forloop.counter <= 3 %}22px{% else %}16px{% endif %};
+          font-weight: 900;
+          text-align: center;
+          color: {% if forloop.counter == 1 %}var(--accent){% elif forloop.counter == 2 %}#aaa{% elif forloop.counter == 3 %}#cd7f32{% else %}var(--muted){% endif %};
+        ">
+          {% if forloop.counter == 1 %}①{% elif forloop.counter == 2 %}②{% elif forloop.counter == 3 %}③{% else %}{{ forloop.counter }}{% endif %}
+        </div>
+
+        <!-- Класс -->
+        <div style="
+          font-family: var(--display);
+          font-size: 18px;
+          font-weight: 600;
+          color: var(--text);
+          text-align: center;
+        ">{{ c.name }}</div>
+
+        <!-- Прогресс-бар экономии -->
+        <div>
+          <div style="font-size: 9px; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.08em;">ЭКОНОМИЯ</div>
+          <div style="height: 6px; background: var(--border); overflow: hidden; position: relative;">
+            <div style="
+              position: absolute; left: 0; top: 0; bottom: 0;
+              background: {% if forloop.counter == 1 %}var(--accent){% elif forloop.counter == 2 %}#0099ff{% else %}var(--muted){% endif %};
+              width: {{ c.savings|floatformat:0 }}%;
+              max-width: {% if c.savings > 0 %}100{% else %}0{% endif %}%;
+              transition: width 1.2s ease {{ forloop.counter|add:"-1" }}00ms;
+            "></div>
+          </div>
+        </div>
+
+        <!-- Процент -->
+        <div style="text-align: right;">
+          {% if c.savings > 0 %}
+          <span style="
+            font-family: var(--display);
+            font-size: 20px;
+            font-weight: 900;
+            color: var(--accent);
+          ">−{{ c.savings }}%</span>
+          {% else %}
+          <span style="font-family: var(--display); font-size: 18px; font-weight: 600; color: var(--danger);">
+            +{{ c.savings|floatformat:1|slice:"1:" }}%
+          </span>
+          {% endif %}
+        </div>
+
+        <!-- Деревья -->
+        <div style="text-align: right; font-size: 12px; color: var(--muted);">
+          {% for t in c.trees|default:0|stringformat:"d" %}{% endfor %}
+          {% if c.trees > 0 %}
+            <span title="{{ c.trees }} деревьев посажено" style="font-size: 14px;">
+              {% for i in "123456789" %}{% if forloop.counter <= c.trees %}🌱{% endif %}{% endfor %}
+            </span>
+          {% else %}
+            <span style="font-size: 10px;">—</span>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Легенда -->
+    <div style="margin-top: 12px; font-size: 10px; color: var(--muted); display: flex; gap: 20px; padding: 0 4px;">
+      <span>🌱 = 1 виртуальное дерево за каждые ~3% экономии</span>
+      <span>Данные: январь vs февраль 2025</span>
+    </div>
+  </div>
+
+  <!-- Виртуальное дерево -->
+  <div>
+    <div class="section-header">
+      <span class="section-title">Дерево школы</span>
+      <div class="section-line"></div>
+    </div>
+
+    <div class="card card-green" style="text-align: center; padding: 32px 24px;">
+      <div style="font-size: 10px; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 8px;">УРОВЕНЬ РОСТА</div>
+      <div style="font-family: var(--display); font-size: 24px; font-weight: 900; color: var(--accent); margin-bottom: 24px;">
+        {{ school_savings }}% экономии
+      </div>
+
+      <!-- SVG дерево анимированное -->
+      <div style="position: relative; height: 240px; display: flex; align-items: flex-end; justify-content: center;">
+        <svg viewBox="0 0 160 220" width="160" height="220" xmlns="http://www.w3.org/2000/svg">
+          <!-- Земля -->
+          <ellipse cx="80" cy="210" rx="50" ry="8" fill="rgba(0,229,160,0.15)"/>
+
+          <!-- Ствол -->
+          <rect x="72" y="150" width="16" height="60" rx="4" fill="#3d2b1a" class="tree-trunk"/>
+
+          {% if tree_level >= 1 %}
+          <!-- Нижний ярус -->
+          <polygon points="80,110 40,165 120,165" fill="#1a4d2e" class="tree-layer layer-1"/>
+          {% endif %}
+
+          {% if tree_level >= 2 %}
+          <!-- Средний ярус -->
+          <polygon points="80,75 45,140 115,140" fill="#1f6635" class="tree-layer layer-2"/>
+          {% endif %}
+
+          {% if tree_level >= 3 %}
+          <!-- Верхний ярус -->
+          <polygon points="80,45 50,115 110,115" fill="#25803f" class="tree-layer layer-3"/>
+          {% endif %}
+
+          {% if tree_level >= 4 %}
+          <!-- Крона -->
+          <polygon points="80,20 55,90 105,90" fill="#2a9a4a" class="tree-layer layer-4"/>
+          {% endif %}
+
+          {% if tree_level >= 5 %}
+          <!-- Верхушка -->
+          <polygon points="80,0 62,68 98,68" fill="#30b455" class="tree-layer layer-5"/>
+          <!-- Звёздочка -->
+          <text x="80" y="-6" text-anchor="middle" font-size="16" fill="#ffcc00" class="star">★</text>
+          {% endif %}
+
+          <!-- Листики-детали -->
+          {% if tree_level >= 2 %}
+          <circle cx="50" cy="130" r="8" fill="rgba(0,229,160,0.4)" class="leaf"/>
+          <circle cx="110" cy="125" r="6" fill="rgba(0,229,160,0.3)" class="leaf"/>
+          {% endif %}
+          {% if tree_level >= 3 %}
+          <circle cx="45" cy="100" r="7" fill="rgba(0,229,160,0.35)" class="leaf"/>
+          <circle cx="115" cy="105" r="9" fill="rgba(0,229,160,0.3)" class="leaf"/>
+          {% endif %}
+        </svg>
+      </div>
+
+      <!-- Прогресс до следующего уровня -->
+      <div style="margin-top: 16px;">
+        <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-bottom: 8px;">
+          <span>Уровень {{ tree_level }}/5</span>
+          {% if tree_level < 5 %}
+          <span>до уровня {{ tree_level|add:1 }} — ещё {{ tree_level|add:1|floatformat:0|add:" × 3%" }}% экономии</span>
+          {% else %}
+          <span>Максимальный уровень!</span>
+          {% endif %}
+        </div>
+        <div style="height: 6px; background: var(--border); overflow: hidden;">
+          <div style="
+            height: 100%;
+            background: var(--accent);
+            width: {% widthratio tree_level 5 100 %}%;
+            transition: width 1.5s ease;
+          "></div>
+        </div>
+      </div>
+
+      <!-- Сообщение -->
+      <div style="margin-top: 20px; padding: 14px; background: rgba(0,229,160,0.06); border: 1px solid rgba(0,229,160,0.2); font-size: 11px; line-height: 1.6; color: var(--text);">
+        {% if tree_level == 0 %}
+          🌰 Начните экономить, чтобы посадить дерево!
+        {% elif tree_level == 1 %}
+          🌱 Росток! Так держать, продолжайте экономить!
+        {% elif tree_level == 2 %}
+          🌿 Саженец растёт! Школа уже молодец!
+        {% elif tree_level == 3 %}
+          🌲 Молодое дерево! Отличные результаты!
+        {% elif tree_level == 4 %}
+          🌳 Большое дерево! Школа — пример для других!
+        {% else %}
+          🏆 Максимум! Ваша школа — эко-чемпион!
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+.tree-layer { transition: all 0.5s ease; }
+.tree-layer:hover { filter: brightness(1.3); }
+.star { animation: spin 4s linear infinite; transform-origin: 80px 0px; }
+.leaf { animation: sway 3s ease-in-out infinite; }
+.leaf:nth-child(2) { animation-delay: 0.5s; }
+.leaf:nth-child(3) { animation-delay: 1s; }
+.leaf:nth-child(4) { animation-delay: 1.5s; }
+
+@keyframes sway {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(3px); }
+}
+@keyframes spin {
+  0%, 90%, 100% { transform: rotate(0deg); }
+  95% { transform: rotate(15deg); }
+}
+</style>
+
+<script>
+// Анимация прогресс-баров таблицы при загрузке
+document.querySelectorAll('[style*="width:"]').forEach(el => {
+  const match = el.style.cssText.match(/width:\s*(\d+)%/);
+  if (match) {
+    const target = match[1];
+    el.style.width = '0%';
+    setTimeout(() => {
+      el.style.transition = 'width 1.2s ease';
+      el.style.width = target + '%';
+    }, 200);
+  }
+});
+
+// Анимация строк
+document.querySelectorAll('[style*="grid-template-columns"]').forEach((row, i) => {
+  row.style.opacity = '0';
+  row.style.transform = 'translateX(-12px)';
+  row.style.transition = `opacity 0.4s ${i * 0.1}s, transform 0.4s ${i * 0.1}s`;
+  requestAnimationFrame(() => {
+    row.style.opacity = '1';
+    row.style.transform = 'translateX(0)';
+  });
+});
+</script>
+{% endblock %}

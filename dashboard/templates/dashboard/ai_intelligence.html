@@ -1,0 +1,140 @@
+{% extends "dashboard/base.html" %}
+
+{% block page_title %}AI Интеллект — Анализ аномалий{% endblock %}
+
+{% block content %}
+
+<!-- AI Совет дня -->
+<div class="section-header">
+  <span class="section-title">Совет дня от AI</span>
+  <div class="section-line"></div>
+  <span class="tag tag-green">Сгенерировано нейросетью</span>
+</div>
+
+<div class="card card-green" style="margin-bottom: 24px; padding: 28px;">
+  <div style="display: flex; gap: 20px; align-items: flex-start;">
+    <div style="font-size: 36px; flex-shrink: 0; opacity: 0.8;">◎</div>
+    <div>
+      <div style="font-size: 9px; letter-spacing: 0.15em; color: var(--accent); margin-bottom: 10px;">
+        AI РЕКОМЕНДАЦИЯ · {{ "now"|date:"d.m.Y" }}
+      </div>
+      <div style="font-family: var(--display); font-size: 14px; font-weight: 300; line-height: 1.7; color: var(--text);">
+        {{ ai_tip }}
+      </div>
+      <div style="margin-top: 14px; font-size: 9px; color: var(--muted);">
+        Модель: EcoNet v2.1 · Уверенность: 91% · Источники: метеоданные, история потребления, план занятий
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Аномалии -->
+<div class="section-header">
+  <span class="section-title">Обнаруженные аномалии</span>
+  <div class="section-line"></div>
+  <span class="tag tag-orange">{{ anomalies|length }} событий</span>
+</div>
+
+<div class="card" style="padding: 0; overflow: hidden;">
+  <table style="width: 100%; border-collapse: collapse;">
+    <thead>
+      <tr style="background: var(--bg3); border-bottom: 1px solid var(--border);">
+        <th style="padding: 14px 20px; text-align: left; font-size: 9px; letter-spacing: 0.12em; color: var(--muted); font-weight: 400;">ВРЕМЯ</th>
+        <th style="padding: 14px 20px; text-align: left; font-size: 9px; letter-spacing: 0.12em; color: var(--muted); font-weight: 400;">БЛОК</th>
+        <th style="padding: 14px 20px; text-align: left; font-size: 9px; letter-spacing: 0.12em; color: var(--muted); font-weight: 400;">СОБЫТИЕ</th>
+        <th style="padding: 14px 20px; text-align: left; font-size: 9px; letter-spacing: 0.12em; color: var(--muted); font-weight: 400;">ВЕРОЯТНОСТЬ</th>
+        <th style="padding: 14px 20px; text-align: left; font-size: 9px; letter-spacing: 0.12em; color: var(--muted); font-weight: 400;">СТАТУС</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in anomalies %}
+      <tr style="border-bottom: 1px solid var(--border); transition: background 0.2s;"
+          onmouseover="this.style.background='rgba(255,255,255,0.02)'"
+          onmouseout="this.style.background='transparent'">
+        <td style="padding: 16px 20px; font-size: 11px; color: var(--muted); white-space: nowrap;">{{ a.time }}</td>
+        <td style="padding: 16px 20px;">
+          <span style="
+            font-size: 10px; padding: 3px 10px;
+            border: 1px solid var(--border);
+            background: var(--bg3);
+            font-family: var(--mono);
+            letter-spacing: 0.05em;
+          ">{{ a.block }}</span>
+        </td>
+        <td style="padding: 16px 20px;">
+          <div style="font-size: 12px; color: var(--text); margin-bottom: 4px;">{{ a.description }}</div>
+          <div style="font-size: 10px; color: var(--muted);">{{ a.detail }}</div>
+        </td>
+        <td style="padding: 16px 20px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 60px; height: 4px; background: var(--border); overflow: hidden;">
+              <div style="
+                height: 100%;
+                width: {{ a.probability }}%;
+                background: {% if a.probability >= 80 %}var(--danger){% elif a.probability >= 60 %}var(--warn){% else %}var(--accent){% endif %};
+              "></div>
+            </div>
+            <span style="
+              font-family: var(--display); font-size: 13px; font-weight: 600;
+              color: {% if a.probability >= 80 %}var(--danger){% elif a.probability >= 60 %}var(--warn){% else %}var(--accent){% endif %};
+            ">{{ a.probability }}%</span>
+          </div>
+        </td>
+        <td style="padding: 16px 20px;">
+          <span style="
+            font-size: 9px; padding: 4px 10px; letter-spacing: 0.1em;
+            border: 1px solid;
+            {% if a.severity == 'high' %}color: var(--danger); border-color: var(--danger); background: rgba(255,59,92,0.08);
+            {% elif a.severity == 'medium' %}color: var(--warn); border-color: var(--warn); background: rgba(255,204,0,0.08);
+            {% else %}color: var(--muted); border-color: var(--muted); background: transparent;{% endif %}
+          ">
+            {% if a.severity == 'high' %}ВЫСОКИЙ{% elif a.severity == 'medium' %}СРЕДНИЙ{% else %}НИЗКИЙ{% endif %}
+          </span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- AI статистика -->
+<div class="grid-3" style="margin-top: 16px;">
+  <div class="card" style="text-align: center; padding: 20px;">
+    <div class="card-label">Аномалий за месяц</div>
+    <div style="font-family: var(--display); font-size: 32px; font-weight: 900; color: var(--accent2); margin: 8px 0;">24</div>
+    <div style="font-size: 10px; color: var(--muted);">↓ на 6 меньше, чем в январе</div>
+  </div>
+  <div class="card" style="text-align: center; padding: 20px;">
+    <div class="card-label">Точность AI-прогноза</div>
+    <div style="font-family: var(--display); font-size: 32px; font-weight: 900; color: var(--accent); margin: 8px 0;">94%</div>
+    <div style="font-size: 10px; color: var(--muted);">на основе 30 дней обучения</div>
+  </div>
+  <div class="card" style="text-align: center; padding: 20px;">
+    <div class="card-label">Сэкономлено благодаря AI</div>
+    <div style="font-family: var(--display); font-size: 32px; font-weight: 900; color: var(--accent3); margin: 8px 0;">₸42к</div>
+    <div style="font-size: 10px; color: var(--muted);">за текущий учебный год</div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Анимация строк таблицы
+document.querySelectorAll('tbody tr').forEach((row, i) => {
+  row.style.opacity = '0';
+  row.style.transform = 'translateX(-10px)';
+  row.style.transition = `opacity 0.3s ${0.1 + i * 0.07}s, transform 0.3s ${0.1 + i * 0.07}s`;
+  requestAnimationFrame(() => {
+    row.style.opacity = '1';
+    row.style.transform = 'translateX(0)';
+  });
+});
+
+// Анимация прогресс-баров
+document.querySelectorAll('[data-prob]').forEach(el => {
+  el.style.width = '0%';
+  setTimeout(() => { el.style.transition = 'width 1s ease'; el.style.width = el.dataset.prob + '%'; }, 200);
+});
+</script>
+{% endblock %}

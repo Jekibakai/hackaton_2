@@ -1,0 +1,207 @@
+{% extends "dashboard/base.html" %}
+
+{% block page_title %}Главная панель — Обзор{% endblock %}
+
+{% block content %}
+
+<!-- Live-карточки -->
+<div class="section-header">
+  <span class="section-title">Live-мониторинг</span>
+  <div class="section-line"></div>
+  <span class="tag tag-green">Обновляется каждые 30 сек</span>
+</div>
+
+<div class="grid-3">
+  <!-- Потребление -->
+  <div class="card card-blue" id="card-kwh">
+    <div class="card-label">⚡ Текущее потребление</div>
+    <div class="card-value" id="val-kwh" style="color: #0099ff">
+      {{ live.kwh }}
+    </div>
+    <div class="card-unit">кВт/ч · прямо сейчас</div>
+    <div class="card-trend trend-up" id="trend-kwh">↑ +3.2%</div>
+  </div>
+
+  <!-- Стоимость -->
+  <div class="card card-orange" id="card-cost">
+    <div class="card-label">₸ Стоимость сегодня</div>
+    <div class="card-value" id="val-cost" style="color: #ff6b35">
+      {{ live.cost_tenge|floatformat:0 }}
+    </div>
+    <div class="card-unit">тенге · за сегодня</div>
+    <div class="card-trend trend-up" id="trend-cost">↑ норма</div>
+  </div>
+
+  <!-- Эко-след -->
+  <div class="card card-green" id="card-co2">
+    <div class="card-label">🌿 CO₂ сэкономлено</div>
+    <div class="card-value" id="val-co2" style="color: #00e5a0">
+      {{ live.co2_saved }}
+    </div>
+    <div class="card-unit">кг CO₂ · по сравнению с нормой</div>
+    <div class="card-trend trend-down" id="trend-co2">↓ −12% выбросов</div>
+  </div>
+</div>
+
+<!-- График -->
+<div class="section-header" style="margin-top: 12px;">
+  <span class="section-title">Потребление за сегодня</span>
+  <div class="section-line"></div>
+  <span class="tag tag-blue">AI-прогноз vs реальность</span>
+</div>
+
+<div class="card card-blue" style="padding: 28px 28px 20px;">
+  <div style="display: flex; gap: 24px; margin-bottom: 20px; font-size: 10px; color: var(--muted);">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="width: 24px; height: 2px; background: #0099ff;"></div>
+      <span>Реальное потребление</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="width: 24px; height: 2px; background: #00e5a0; border-top: 2px dashed #00e5a0; border-width: 0;
+        background: repeating-linear-gradient(90deg, #00e5a0 0, #00e5a0 6px, transparent 6px, transparent 12px);"></div>
+      <span>AI-прогноз</span>
+    </div>
+  </div>
+  <div style="position: relative; height: 260px;">
+    <canvas id="energyChart"></canvas>
+  </div>
+</div>
+
+<!-- Мини статистика -->
+<div class="grid-2" style="margin-top: 16px;">
+  <div class="card">
+    <div class="card-label">📊 Сводка за неделю</div>
+    <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+      {% for item in week_data %}
+      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+        <span style="color: var(--muted);">{{ item.day }}</span>
+        <div style="flex: 1; margin: 0 12px; height: 4px; background: var(--border); position: relative; overflow: hidden;">
+          <div style="position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent2); width: {{ item.percent }}%;"></div>
+        </div>
+        <span style="font-family: var(--display); font-size: 12px; font-weight: 600;">{{ item.kwh }} кВт</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card card-green">
+    <div class="card-label">🏫 Блоки сейчас</div>
+    <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 12px;">
+      {% for block in blocks %}
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 11px; color: var(--muted);">Блок {{ block.name }}</span>
+        <div style="flex: 1; margin: 0 12px; height: 6px; background: var(--border); position: relative; overflow: hidden;">
+          <div style="position: absolute; left: 0; top: 0; bottom: 0; background: {{ block.color }}; width: {{ block.percent }}%; transition: width 1s;"></div>
+        </div>
+        <span style="font-size: 11px; font-family: var(--display); font-weight: 600;">{{ block.kwh }} кВт</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const chartData = {{ chart_json|safe }};
+
+// Рисуем график
+const ctx = document.getElementById('energyChart').getContext('2d');
+new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: chartData.labels,
+    datasets: [
+      {
+        label: 'Реальное',
+        data: chartData.real,
+        borderColor: '#0099ff',
+        backgroundColor: 'rgba(0,153,255,0.08)',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: '#0099ff',
+        tension: 0.4,
+        fill: true,
+        spanGaps: false,
+      },
+      {
+        label: 'AI-прогноз',
+        data: chartData.forecast,
+        borderColor: '#00e5a0',
+        borderWidth: 2,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        tension: 0.4,
+        fill: false,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#0d1520',
+        borderColor: '#1a2d44',
+        borderWidth: 1,
+        titleColor: '#4a6080',
+        bodyColor: '#e8f0f8',
+        titleFont: { family: 'Space Mono', size: 10 },
+        bodyFont: { family: 'Space Mono', size: 11 },
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(26,45,68,0.6)', drawBorder: false },
+        ticks: { color: '#4a6080', font: { family: 'Space Mono', size: 9 }, maxTicksLimit: 12 },
+        border: { color: '#1a2d44' }
+      },
+      y: {
+        grid: { color: 'rgba(26,45,68,0.6)', drawBorder: false },
+        ticks: { color: '#4a6080', font: { family: 'Space Mono', size: 9 } },
+        border: { color: '#1a2d44' }
+      }
+    }
+  }
+});
+
+// Live-обновление карточек каждые 30 сек
+function refreshLive() {
+  fetch('/api/live/')
+    .then(r => r.json())
+    .then(d => {
+      const kwh = document.getElementById('val-kwh');
+      const cost = document.getElementById('val-cost');
+      const co2 = document.getElementById('val-co2');
+
+      // Анимация изменения
+      [kwh, cost, co2].forEach(el => {
+        el.style.opacity = '0.3';
+        el.style.transition = 'opacity 0.3s';
+      });
+      setTimeout(() => {
+        kwh.textContent = d.kwh;
+        cost.textContent = Math.round(d.cost_tenge).toLocaleString('ru');
+        co2.textContent = d.co2_saved;
+        [kwh, cost, co2].forEach(el => { el.style.opacity = '1'; });
+      }, 300);
+    })
+    .catch(() => {});
+}
+setInterval(refreshLive, 30000);
+
+// Анимация карточек при загрузке
+document.querySelectorAll('.card').forEach((card, i) => {
+  card.style.opacity = '0';
+  card.style.transform = 'translateY(16px)';
+  card.style.transition = `opacity 0.4s ${i * 0.08}s, transform 0.4s ${i * 0.08}s`;
+  requestAnimationFrame(() => {
+    card.style.opacity = '1';
+    card.style.transform = 'translateY(0)';
+  });
+});
+</script>
+{% endblock %}
