@@ -312,18 +312,28 @@
   <div class="sidebar-logo">
     <div class="logo-badge">ECO</div>
     <div class="logo-title">Energy<br>Monitor</div>
-    <div class="logo-sub">АБУ ЧЕРТ</div>
+    <div class="logo-sub">СОШ №47 · Астана</div>
   </div>
 
   <div class="nav">
     <a href="{% url 'overview' %}" class="nav-item {% if active_tab == 'overview' %}active{% endif %}">
-      <span class="nav-icon">◈</span> Обззор
+      <span class="nav-icon">◈</span> Обзор
+    </a>
+    <a href="{% url 'classrooms' %}" class="nav-item {% if active_tab == 'classrooms' %}active{% endif %}">
+      <span class="nav-icon">◉</span> Кабинеты
     </a>
     <a href="{% url 'ai_intelligence' %}" class="nav-item {% if active_tab == 'ai' %}active{% endif %}">
-      <span class="nav-icon">◎</span> AI предикты
+      <span class="nav-icon">◎</span> AI Интеллект
     </a>
     <a href="{% url 'gamification' %}" class="nav-item {% if active_tab == 'gamification' %}active{% endif %}">
-      <span class="nav-icon">◆</span> Классы
+      <span class="nav-icon">◆</span> Геймификация
+    </a>
+
+    <div style="height: 1px; background: var(--border); margin: 8px 24px;"></div>
+
+    <a href="{% url 'manage_classes' %}" class="nav-item {% if active_tab == 'manage' %}active{% endif %}"
+       style="{% if active_tab == 'manage' %}color: var(--warn); border-left-color: var(--warn); background: rgba(255,204,0,0.06);{% endif %}">
+      <span class="nav-icon">⚙</span> Управление
     </a>
   </div>
 

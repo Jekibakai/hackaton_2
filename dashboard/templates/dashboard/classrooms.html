@@ -1,10 +1,534 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
-</head>
-<body>
-$END$
-</body>
-</html>
+{% extends "dashboard/base.html" %}
+
+{% block page_title %}Умные кабинеты — AI контроль освещения{% endblock %}
+
+{% block content %}
+<style>
+/* ── Карточки кабинетов ── */
+.rooms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.room-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.room-card::after {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  transition: background 0.3s;
+}
+.room-card.light-on  { border-color: rgba(0,229,160,0.4); }
+.room-card.light-on::after  { background: var(--accent); }
+.room-card.light-off { border-color: var(--border); }
+.room-card.light-off::after { background: var(--muted); }
+.room-card.light-waiting { border-color: rgba(255,204,0,0.4); }
+.room-card.light-waiting::after { background: var(--warn); }
+
+.room-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+
+.room-name {
+  font-family: var(--display);
+  font-size: 15px; font-weight: 600;
+  margin-bottom: 12px; color: var(--text);
+}
+
+.room-light-icon {
+  font-size: 32px; margin-bottom: 8px;
+  transition: all 0.3s;
+}
+.light-on  .room-light-icon { filter: drop-shadow(0 0 12px #ffcc00); }
+.light-off .room-light-icon { filter: grayscale(1) opacity(0.4); }
+
+.room-status {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.light-on      .room-status { color: var(--accent); }
+.light-off     .room-status { color: var(--muted); }
+.light-waiting .room-status { color: var(--warn); }
+
+.room-updated {
+  font-size: 9px; color: var(--muted);
+  margin-top: 8px; letter-spacing: 0.05em;
+}
+
+.person-dot {
+  position: absolute; top: 14px; right: 14px;
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.person-present { background: var(--accent); animation: pulse 2s infinite; }
+.person-absent  { background: var(--muted); }
+
+/* ── Модалка камеры ── */
+#camera-modal {
+  position: fixed; inset: 0; z-index: 9000;
+  background: rgba(0,0,0,0.85);
+  display: none; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px);
+}
+#camera-modal.open { display: flex; }
+
+.modal-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  width: 700px; max-width: 95vw;
+  position: relative;
+  overflow: hidden;
+}
+.modal-box::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+}
+
+.modal-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-title {
+  font-family: var(--display); font-size: 16px; font-weight: 600;
+}
+.modal-close {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--muted); cursor: pointer; padding: 6px 12px;
+  font-family: var(--mono); font-size: 11px;
+  transition: all 0.2s;
+}
+.modal-close:hover { border-color: var(--danger); color: var(--danger); }
+
+.modal-body { padding: 24px; }
+
+/* ── Видео зона ── */
+.video-zone {
+  position: relative;
+  background: #000;
+  border: 1px solid var(--border);
+  aspect-ratio: 16/9;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; margin-bottom: 16px;
+}
+
+#camera-feed {
+  width: 100%; height: 100%; object-fit: cover;
+  display: none;
+}
+
+.video-placeholder {
+  text-align: center; color: var(--muted);
+}
+.video-placeholder .icon { font-size: 48px; margin-bottom: 12px; opacity: 0.4; }
+.video-placeholder p { font-size: 12px; letter-spacing: 0.05em; }
+
+/* ── Статус-оверлей на видео ── */
+.video-status-overlay {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 12px 16px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.8));
+  display: flex; align-items: center; justify-content: space-between;
+}
+.live-indicator {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10px; letter-spacing: 0.1em; color: var(--danger);
+}
+.live-dot-red {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--danger); animation: pulse 1s infinite;
+}
+
+/* ── Статус блок под видео ── */
+.status-display {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+.stat-box {
+  background: var(--bg3); border: 1px solid var(--border);
+  padding: 14px; text-align: center;
+}
+.stat-label { font-size: 9px; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 6px; }
+.stat-val { font-family: var(--display); font-size: 18px; font-weight: 700; }
+
+/* ── Большой статус LIGHT ON/OFF ── */
+.big-status {
+  text-align: center; padding: 16px;
+  border: 2px solid; margin-bottom: 16px;
+  font-family: var(--display); font-size: 28px; font-weight: 900;
+  letter-spacing: 0.15em; transition: all 0.3s;
+}
+.big-status.on  { color: var(--accent); border-color: var(--accent); background: rgba(0,229,160,0.06); }
+.big-status.off { color: var(--muted);  border-color: var(--border);  background: transparent; }
+.big-status.waiting { color: var(--warn); border-color: var(--warn); background: rgba(255,204,0,0.06); }
+
+/* ── Кнопки управления ── */
+.control-btns {
+  display: flex; gap: 10px; margin-top: 16px;
+}
+.ctrl-btn {
+  flex: 1; padding: 12px; font-family: var(--mono);
+  font-size: 11px; letter-spacing: 0.08em;
+  cursor: pointer; border: 1px solid;
+  transition: all 0.2s; text-transform: uppercase;
+}
+.ctrl-start { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.ctrl-start:hover { background: transparent; color: var(--accent); }
+.ctrl-stop  { background: transparent; color: var(--danger); border-color: var(--danger); }
+.ctrl-stop:hover  { background: var(--danger); color: var(--bg); }
+</style>
+
+<!-- ── Сводка вверху ── -->
+<div style="display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 24px;">
+  <div class="card card-green" style="padding:20px; text-align:center;">
+    <div class="card-label">Всего кабинетов</div>
+    <div style="font-family:var(--display); font-size:32px; font-weight:900; color:var(--accent2); margin:6px 0;" id="total-count">{{ total }}</div>
+  </div>
+  <div class="card" style="padding:20px; text-align:center; border-color:rgba(0,229,160,0.3);">
+    <div class="card-label">💡 Свет включён</div>
+    <div style="font-family:var(--display); font-size:32px; font-weight:900; color:var(--accent); margin:6px 0;" id="on-count">{{ lights_on }}</div>
+  </div>
+  <div class="card" style="padding:20px; text-align:center;">
+    <div class="card-label">🌑 Свет выключен</div>
+    <div style="font-family:var(--display); font-size:32px; font-weight:900; color:var(--muted); margin:6px 0;" id="off-count">{{ lights_off }}</div>
+  </div>
+</div>
+
+<!-- ── Подсказка ── -->
+<div class="section-header">
+  <span class="section-title">Кабинеты</span>
+  <div class="section-line"></div>
+  <span class="tag tag-green">Нажми на кабинет → камера</span>
+</div>
+
+<!-- ── Сетка кабинетов ── -->
+<div class="rooms-grid" id="rooms-grid">
+  {% for room in rooms %}
+  <div class="room-card light-{{ room.light_status }}"
+       id="room-card-{{ room.id }}"
+       onclick="openCamera('{{ room.id }}', '{{ room.name }}')">
+
+    <div class="person-dot {% if room.person_detected %}person-present{% else %}person-absent{% endif %}"
+         id="dot-{{ room.id }}" title="{% if room.person_detected %}Есть люди{% else %}Пусто{% endif %}">
+    </div>
+
+    <div class="room-light-icon" id="icon-{{ room.id }}">
+      {% if room.light_status == 'on' %}💡{% elif room.light_status == 'waiting' %}⏳{% else %}🌑{% endif %}
+    </div>
+    <div class="room-name">{{ room.name }}</div>
+    <div class="room-status" id="status-text-{{ room.id }}">
+      {% if room.light_status == 'on' %}LIGHT ON{% elif room.light_status == 'waiting' %}WAITING...{% else %}LIGHT OFF{% endif %}
+    </div>
+    <div class="room-updated" id="updated-{{ room.id }}">
+      обновлено: {{ room.updated_at|date:"H:i:s" }}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── Модалка с камерой ── -->
+<div id="camera-modal" onclick="closeModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Кабинет</div>
+      <button class="modal-close" onclick="closeCamera()">✕ Закрыть</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Большой статус -->
+      <div class="big-status off" id="big-status">LIGHT OFF</div>
+
+      <!-- Видео -->
+      <div class="video-zone">
+        <video id="camera-feed" autoplay playsinline muted></video>
+
+        <div class="video-placeholder" id="video-placeholder">
+          <div class="icon">📷</div>
+          <p>Нажмите "Запустить камеру"<br>для анализа присутствия</p>
+        </div>
+
+        <!-- Оверлей поверх видео -->
+        <div class="video-status-overlay" id="video-overlay" style="display:none;">
+          <div class="live-indicator">
+            <div class="live-dot-red"></div>
+            AI АНАЛИЗ
+          </div>
+          <div style="font-size:11px; color:rgba(255,255,255,0.7);" id="overlay-status">
+            Инициализация...
+          </div>
+        </div>
+      </div>
+
+      <!-- Статистика -->
+      <div class="status-display">
+        <div class="stat-box">
+          <div class="stat-label">Статус света</div>
+          <div class="stat-val" id="stat-light" style="color:var(--muted);">OFF</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Люди в кабинете</div>
+          <div class="stat-val" id="stat-person" style="color:var(--muted);">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Обновлено</div>
+          <div class="stat-val" id="stat-time" style="font-size:13px; color:var(--muted);">—</div>
+        </div>
+      </div>
+
+      <!-- Кнопки -->
+      <div class="control-btns">
+        <button class="ctrl-btn ctrl-start" id="btn-start" onclick="startCamera()">
+          📷 Запустить камеру
+        </button>
+        <button class="ctrl-btn ctrl-stop"  id="btn-stop"  onclick="stopCamera()" style="display:none;">
+          ■ Остановить
+        </button>
+      </div>
+
+      <div style="margin-top:14px; padding:12px; background:var(--bg3); border:1px solid var(--border); font-size:10px; color:var(--muted); line-height:1.6;">
+        💡 <strong style="color:var(--text);">Как это работает:</strong>
+        Камера анализирует кадры через браузер. Статус автоматически обновляется каждые 3 секунды.
+        Для полного AI-анализа (YOLOv8) запусти Python-скрипт отдельно — он будет слать статус через API.
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentRoomId   = null;
+let currentRoomName = null;
+let cameraStream    = null;
+let analysisLoop    = null;
+let pollLoop        = null;
+
+// ── Открыть модалку ─────────────────────────────────────
+function openCamera(roomId, roomName) {
+  currentRoomId   = roomId;
+  currentRoomName = roomName;
+
+  document.getElementById('modal-title').textContent = roomName;
+  document.getElementById('camera-modal').classList.add('open');
+
+  // Показываем актуальный статус из карточки
+  const card = document.getElementById('room-card-' + roomId);
+  const statusText = document.getElementById('status-text-' + roomId).textContent.trim();
+  updateBigStatus(statusText);
+
+  // Polling статуса с сервера пока модалка открыта
+  pollLoop = setInterval(() => fetchRoomStatus(roomId), 3000);
+}
+
+function closeCamera() {
+  stopCamera();
+  document.getElementById('camera-modal').classList.remove('open');
+  clearInterval(pollLoop);
+  currentRoomId = null;
+}
+
+function closeModal(e) {
+  if (e.target.id === 'camera-modal') closeCamera();
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCamera(); });
+
+// ── Камера в браузере ────────────────────────────────────
+async function startCamera() {
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    const video  = document.getElementById('camera-feed');
+    video.srcObject = cameraStream;
+    video.style.display = 'block';
+
+    document.getElementById('video-placeholder').style.display = 'none';
+    document.getElementById('video-overlay').style.display     = 'flex';
+    document.getElementById('btn-start').style.display = 'none';
+    document.getElementById('btn-stop').style.display  = 'inline-block';
+
+    // Простой анализ через браузер (без YOLOv8)
+    // Реальный анализ делает Python-скрипт и шлёт сюда через API
+    analysisLoop = setInterval(() => browserAnalysis(video), 1000);
+
+  } catch(e) {
+    alert('Не удалось открыть камеру: ' + e.message);
+  }
+}
+
+function stopCamera() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+  }
+  clearInterval(analysisLoop);
+
+  const video = document.getElementById('camera-feed');
+  video.srcObject = null;
+  video.style.display = 'none';
+
+  document.getElementById('video-placeholder').style.display = 'flex';
+  document.getElementById('video-overlay').style.display     = 'none';
+  document.getElementById('btn-start').style.display = 'inline-block';
+  document.getElementById('btn-stop').style.display  = 'none';
+}
+
+// ── Простой анализ яркости (заглушка без YOLO) ──────────
+// Реальный AI-анализ делает Python-скрипт и шлёт POST на /api/classroom/
+let noMotionTimer = null;
+let prevBrightness = null;
+
+function browserAnalysis(video) {
+  try {
+    const canvas  = document.createElement('canvas');
+    canvas.width  = 64;
+    canvas.height = 36;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, 64, 36);
+    const data = ctx.getImageData(0, 0, 64, 36).data;
+
+    // Считаем среднюю яркость
+    let brightness = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      brightness += (data[i] + data[i+1] + data[i+2]) / 3;
+    }
+    brightness = brightness / (64 * 36);
+
+    // Детектим движение по изменению яркости
+    let motionDetected = false;
+    if (prevBrightness !== null) {
+      motionDetected = Math.abs(brightness - prevBrightness) > 3;
+    }
+    prevBrightness = brightness;
+
+    const overlayStatus = document.getElementById('overlay-status');
+    if (motionDetected) {
+      noMotionTimer = null;
+      overlayStatus.textContent = '👤 Движение обнаружено';
+      sendStatusToServer(currentRoomName, true, 'on');
+    } else {
+      if (noMotionTimer === null) noMotionTimer = Date.now();
+      const elapsed = (Date.now() - noMotionTimer) / 1000;
+      if (elapsed > 10) {
+        overlayStatus.textContent = '🌑 Нет движения → LIGHT OFF';
+        sendStatusToServer(currentRoomName, false, 'off');
+      } else {
+        overlayStatus.textContent = `⏳ Нет движения ${elapsed.toFixed(0)}с / 10с`;
+        sendStatusToServer(currentRoomName, false, 'waiting');
+      }
+    }
+  } catch(e) {}
+}
+
+// ── Шлём статус на Django ────────────────────────────────
+async function sendStatusToServer(name, personDetected, status) {
+  if (!name) return;
+  try {
+    await fetch('/api/classroom/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrf(),
+      },
+      body: JSON.stringify({
+        classroom: name,
+        person_detected: personDetected,
+        status: status,
+      }),
+    });
+  } catch(e) {}
+}
+
+// ── Обновляем карточку из polling ────────────────────────
+async function fetchRoomStatus(roomId) {
+  try {
+    const resp = await fetch('/api/classroom/');
+    const data = await resp.json();
+    const room = data.classrooms.find(r => String(r.id) === String(roomId));
+    if (!room) return;
+
+    // Обновляем модалку
+    updateBigStatus(room.light_status === 'on' ? 'LIGHT ON' :
+                    room.light_status === 'waiting' ? 'WAITING...' : 'LIGHT OFF');
+
+    document.getElementById('stat-light').textContent  = room.light_status.toUpperCase();
+    document.getElementById('stat-light').style.color  =
+      room.light_status === 'on' ? 'var(--accent)' :
+      room.light_status === 'waiting' ? 'var(--warn)' : 'var(--muted)';
+    document.getElementById('stat-person').textContent = room.person_detected ? 'ДА 👤' : 'НЕТ';
+    document.getElementById('stat-person').style.color = room.person_detected ? 'var(--accent)' : 'var(--muted)';
+    document.getElementById('stat-time').textContent   = room.updated_at;
+
+  } catch(e) {}
+}
+
+// ── Polling всех карточек каждые 5 сек ──────────────────
+async function pollAllRooms() {
+  try {
+    const resp = await fetch('/api/classroom/');
+    const data = await resp.json();
+    let onCount = 0, offCount = 0;
+
+    data.classrooms.forEach(room => {
+      const card    = document.getElementById('room-card-' + room.id);
+      const icon    = document.getElementById('icon-' + room.id);
+      const statusT = document.getElementById('status-text-' + room.id);
+      const dot     = document.getElementById('dot-' + room.id);
+      const upd     = document.getElementById('updated-' + room.id);
+      if (!card) return;
+
+      // Обновляем классы карточки
+      card.className = 'room-card light-' + room.light_status;
+
+      icon.textContent    = room.light_status === 'on' ? '💡' :
+                            room.light_status === 'waiting' ? '⏳' : '🌑';
+      statusT.textContent = room.light_status === 'on' ? 'LIGHT ON' :
+                            room.light_status === 'waiting' ? 'WAITING...' : 'LIGHT OFF';
+      dot.className = 'person-dot ' + (room.person_detected ? 'person-present' : 'person-absent');
+      if (upd) upd.textContent = 'обновлено: ' + room.updated_at;
+
+      if (room.light_status === 'on') onCount++;
+      else offCount++;
+    });
+
+    document.getElementById('on-count').textContent  = onCount;
+    document.getElementById('off-count').textContent = offCount;
+
+  } catch(e) {}
+}
+
+setInterval(pollAllRooms, 5000);
+
+// ── Хелперы ──────────────────────────────────────────────
+function updateBigStatus(statusText) {
+  const el = document.getElementById('big-status');
+  el.textContent = statusText;
+  el.className = 'big-status ' +
+    (statusText === 'LIGHT ON' ? 'on' :
+     statusText === 'WAITING...' ? 'waiting' : 'off');
+}
+
+function getCsrf() {
+  return document.cookie.split(';')
+    .find(c => c.trim().startsWith('csrftoken='))
+    ?.split('=')[1] || '';
+}
+
+// ── Анимация карточек ────────────────────────────────────
+document.querySelectorAll('.room-card').forEach((card, i) => {
+  card.style.opacity   = '0';
+  card.style.transform = 'translateY(12px)';
+  card.style.transition = `opacity 0.3s ${i * 0.06}s, transform 0.3s ${i * 0.06}s`;
+  requestAnimationFrame(() => {
+    card.style.opacity   = '1';
+    card.style.transform = 'translateY(0)';
+  });
+});
+</script>
+{% endblock %}

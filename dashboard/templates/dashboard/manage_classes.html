@@ -1,10 +1,460 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
-</head>
-<body>
-$END$
-</body>
-</html>
+{% extends "dashboard/base.html" %}
+
+{% block page_title %}Управление классами{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+<div id="messages-container">
+  {% for msg in messages %}
+  <div class="flash-message flash-{{ msg.tags }}" id="flash-{{ forloop.counter }}">
+    <span>{% if msg.tags == 'success' %}✓{% else %}✕{% endif %}</span>
+    {{ msg }}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<style>
+.flash-message {
+  padding: 14px 20px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: slideIn 0.3s ease;
+  border: 1px solid;
+}
+.flash-success { color: var(--accent); border-color: var(--accent); background: rgba(0,229,160,0.08); }
+.flash-error   { color: var(--danger); border-color: var(--danger); background: rgba(255,59,92,0.08); }
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Форма */
+.form-row {
+  display: grid;
+  grid-template-columns: 160px 1fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+}
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-label { font-size: 9px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; }
+.form-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+}
+.form-input:focus { border-color: var(--accent); }
+.form-input::placeholder { color: var(--muted); }
+
+.btn {
+  padding: 10px 20px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  border: 1px solid;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+.btn-primary:hover { background: transparent; color: var(--accent); }
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.btn-danger:hover { background: var(--danger); color: var(--bg); }
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--border);
+}
+.btn-ghost:hover { color: var(--text); border-color: var(--text); }
+.btn-warn {
+  background: transparent;
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.btn-warn:hover { background: var(--warn); color: var(--bg); }
+
+/* Таблица */
+.manage-table { width: 100%; border-collapse: collapse; }
+.manage-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  font-weight: 400;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+.manage-table td {
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.td-inner { padding: 12px 16px; }
+.manage-table tr:last-child td { border-bottom: none; }
+.manage-table tr:hover td { background: rgba(255,255,255,0.015); }
+
+/* Инлайн-редактирование */
+.inline-edit-input {
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 6px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  width: 90px;
+  outline: none;
+}
+
+/* Дерево миниатюра */
+.mini-tree { font-size: 14px; letter-spacing: 2px; }
+
+/* Итог */
+.summary-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.summary-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  padding: 20px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.summary-card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+}
+.summary-card.green::after { background: linear-gradient(90deg, transparent, var(--accent), transparent); }
+.summary-card.blue::after  { background: linear-gradient(90deg, transparent, var(--accent2), transparent); }
+.summary-card.orange::after { background: linear-gradient(90deg, transparent, var(--accent3), transparent); }
+.summary-val {
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 1;
+  margin: 8px 0 4px;
+}
+.summary-label { font-size: 9px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; }
+</style>
+
+<!-- Итог вверху -->
+<div class="summary-bar" id="summary-bar">
+  <div class="summary-card green">
+    <div class="summary-label">Классов в системе</div>
+    <div class="summary-val" id="summary-count" style="color: var(--accent);">{{ ratings|length }}</div>
+  </div>
+  <div class="summary-card blue">
+    <div class="summary-label">Средняя экономия школы</div>
+    <div class="summary-val" id="summary-savings" style="color: var(--accent2);">{{ school_savings }}%</div>
+  </div>
+  <div class="summary-card orange">
+    <div class="summary-label">Уровень дерева</div>
+    <div class="summary-val" id="summary-tree" style="color: var(--accent3);">{{ tree_level }}/5</div>
+  </div>
+</div>
+
+<!-- Добавить класс -->
+<div class="section-header">
+  <span class="section-title">Добавить класс</span>
+  <div class="section-line"></div>
+</div>
+
+<div class="card" style="margin-bottom: 24px; padding: 24px;">
+  <form method="post" id="add-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="add">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Название класса</label>
+        <input class="form-input" type="text" name="class_name"
+               placeholder="напр. 8А" maxlength="10"
+               value="{{ request.POST.class_name|default:'' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Потребление — текущий месяц (кВт)</label>
+        <input class="form-input" type="number" name="current_kwh"
+               placeholder="напр. 155.0" step="0.1" min="1"
+               value="{{ request.POST.current_kwh|default:'' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Потребление — прошлый месяц (кВт)</label>
+        <input class="form-input" type="number" name="previous_kwh"
+               placeholder="напр. 190.0" step="0.1" min="1"
+               value="{{ request.POST.previous_kwh|default:'' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">&nbsp;</label>
+        <button class="btn btn-primary" type="submit">+ Добавить</button>
+      </div>
+    </div>
+
+    <!-- Живой предпросмотр -->
+    <div id="preview" style="display:none; margin-top: 16px; padding: 14px; background: var(--bg3); border: 1px solid var(--border); font-size: 12px; color: var(--muted);">
+      Предпросмотр: класс <strong id="prev-name" style="color:var(--text)"></strong>
+      сэкономит <strong id="prev-savings" style="color:var(--accent)"></strong>%
+      → <strong id="prev-trees" style="color:var(--accent)"></strong> 🌱
+    </div>
+  </form>
+</div>
+
+<!-- Таблица классов -->
+<div class="section-header">
+  <span class="section-title">Текущий рейтинг</span>
+  <div class="section-line"></div>
+  <span class="tag tag-green">{{ ratings|length }} классов</span>
+
+  <!-- Кнопка сброса -->
+  <form method="post" style="margin: 0;" onsubmit="return confirm('Сбросить все данные к демо-значениям?')">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="reset">
+    <button class="btn btn-warn" type="submit" style="padding: 6px 14px; font-size: 10px;">↺ Сбросить демо</button>
+  </form>
+</div>
+
+<div class="card" style="padding: 0; overflow: hidden;">
+  <table class="manage-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Класс</th>
+        <th>Тек. месяц (кВт)</th>
+        <th>Пред. месяц (кВт)</th>
+        <th>Экономия</th>
+        <th>Деревья</th>
+        <th>Действия</th>
+      </tr>
+    </thead>
+    <tbody id="ratings-tbody">
+      {% for c in ratings %}
+      <tr id="row-{{ c.id }}">
+        <!-- Место -->
+        <td>
+          <div class="td-inner" style="font-family: var(--display); font-weight: 900; font-size: 18px;
+            color: {% if forloop.counter == 1 %}var(--accent){% elif forloop.counter == 2 %}#aaa{% elif forloop.counter == 3 %}#cd7f32{% else %}var(--muted){% endif %};">
+            {{ forloop.counter }}
+          </div>
+        </td>
+
+        <!-- Имя -->
+        <td>
+          <div class="td-inner" style="font-family: var(--display); font-size: 16px; font-weight: 600;">
+            {{ c.class_name }}
+          </div>
+        </td>
+
+        <!-- Текущее (редактируемое) -->
+        <td>
+          <div class="td-inner">
+            <form method="post" class="inline-form" data-id="{{ c.id }}">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="update">
+              <input type="hidden" name="pk" value="{{ c.id }}">
+              <input class="inline-edit-input current-input" type="number"
+                     name="current_kwh" value="{{ c.current_kwh }}"
+                     step="0.1" min="1"
+                     data-id="{{ c.id }}"
+                     title="Изменить — нажмите Enter для сохранения">
+              <input type="hidden" name="previous_kwh" value="{{ c.previous_kwh }}" class="prev-hidden">
+            </form>
+          </div>
+        </td>
+
+        <!-- Прошлое (редактируемое) -->
+        <td>
+          <div class="td-inner">
+            <input class="inline-edit-input prev-input" type="number"
+                   value="{{ c.previous_kwh }}"
+                   step="0.1" min="1"
+                   data-id="{{ c.id }}"
+                   title="Изменить — нажмите Enter для сохранения">
+          </div>
+        </td>
+
+        <!-- Экономия -->
+        <td>
+          <div class="td-inner">
+            <span class="savings-val" data-id="{{ c.id }}" style="
+              font-family: var(--display); font-size: 16px; font-weight: 700;
+              color: {% if c.savings_percent > 0 %}var(--accent){% else %}var(--danger){% endif %};">
+              {% if c.savings_percent > 0 %}−{% endif %}{{ c.savings_percent }}%
+            </span>
+          </div>
+        </td>
+
+        <!-- Деревья -->
+        <td>
+          <div class="td-inner mini-tree trees-val" data-id="{{ c.id }}">
+            {% for i in "12345678" %}{% if forloop.counter <= c.trees_saved %}🌱{% endif %}{% endfor %}
+            {% if c.trees_saved == 0 %}<span style="color:var(--muted); font-size:11px;">нет</span>{% endif %}
+          </div>
+        </td>
+
+        <!-- Удалить -->
+        <td>
+          <div class="td-inner">
+            <form method="post" style="display:inline;"
+                  onsubmit="return confirm('Удалить класс {{ c.class_name }}?')">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="pk" value="{{ c.id }}">
+              <button class="btn btn-danger" type="submit"
+                      style="padding: 6px 12px; font-size: 10px;">✕ Удалить</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="7">
+          <div class="td-inner" style="text-align:center; color:var(--muted); padding: 32px; font-size:12px;">
+            Нет классов. Добавьте первый класс выше.
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div style="margin-top: 12px; font-size: 10px; color: var(--muted);">
+  💡 Редактируйте показания прямо в таблице — нажмите <kbd style="background:var(--bg3); border:1px solid var(--border); padding: 1px 6px;">Enter</kbd> или кликните за пределами поля для сохранения.
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Живой предпросмотр при вводе в форму добавления ──────
+const nameInput    = document.querySelector('input[name="class_name"]');
+const currInput    = document.querySelector('input[name="current_kwh"]');
+const prevInput    = document.querySelector('input[name="previous_kwh"]');
+const preview      = document.getElementById('preview');
+const prevName     = document.getElementById('prev-name');
+const prevSavings  = document.getElementById('prev-savings');
+const prevTrees    = document.getElementById('prev-trees');
+
+function updatePreview() {
+  const name = nameInput.value.trim();
+  const curr = parseFloat(currInput.value);
+  const prev = parseFloat(prevInput.value);
+
+  if (name && curr > 0 && prev > 0) {
+    const savings = ((prev - curr) / prev * 100).toFixed(1);
+    const trees   = Math.max(0, Math.floor(savings * 0.3));
+    prevName.textContent    = name;
+    prevSavings.textContent = savings;
+    prevSavings.style.color = savings > 0 ? 'var(--accent)' : 'var(--danger)';
+    prevTrees.textContent   = trees > 0 ? ('🌱').repeat(Math.min(trees, 8)) : '0';
+    preview.style.display   = 'block';
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+[nameInput, currInput, prevInput].forEach(el => el.addEventListener('input', updatePreview));
+
+// ── Инлайн-редактирование строк таблицы ─────────────────
+function submitInlineUpdate(id) {
+  const form     = document.querySelector(`.inline-form[data-id="${id}"]`);
+  const currEl   = document.querySelector(`.current-input[data-id="${id}"]`);
+  const prevEl   = document.querySelector(`.prev-input[data-id="${id}"]`);
+  const prevHidden = form.querySelector('.prev-hidden');
+
+  const curr = parseFloat(currEl.value);
+  const prev = parseFloat(prevEl.value);
+
+  if (!curr || !prev || curr <= 0 || prev <= 0) return;
+
+  // Обновляем hidden поле с предыдущим значением
+  prevHidden.value = prev;
+
+  // Оптимистично обновляем UI
+  const savings = ((prev - curr) / prev * 100).toFixed(1);
+  const trees   = Math.max(0, Math.floor(savings * 0.3));
+
+  const savingsEl = document.querySelector(`.savings-val[data-id="${id}"]`);
+  const treesEl   = document.querySelector(`.trees-val[data-id="${id}"]`);
+
+  if (savingsEl) {
+    savingsEl.textContent = (savings > 0 ? '−' : '') + savings + '%';
+    savingsEl.style.color = savings > 0 ? 'var(--accent)' : 'var(--danger)';
+  }
+  if (treesEl) {
+    treesEl.textContent = trees > 0 ? '🌱'.repeat(Math.min(trees, 8)) : '';
+    if (trees === 0) treesEl.innerHTML = '<span style="color:var(--muted); font-size:11px;">нет</span>';
+  }
+
+  // Обновляем итоговую сводку через API
+  updateSummary();
+
+  // Отправляем форму
+  form.submit();
+}
+
+document.querySelectorAll('.current-input, .prev-input').forEach(input => {
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitInlineUpdate(input.dataset.id);
+    }
+  });
+  input.addEventListener('blur', () => {
+    submitInlineUpdate(input.dataset.id);
+  });
+  // Подсветка при фокусе
+  input.addEventListener('focus', () => {
+    input.closest('tr').style.background = 'rgba(0,229,160,0.04)';
+  });
+  input.addEventListener('blur', () => {
+    input.closest('tr').style.background = '';
+  });
+});
+
+// ── Обновление сводки через API ──────────────────────────
+function updateSummary() {
+  fetch('/api/ratings/')
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('summary-count').textContent   = d.ratings.length;
+      document.getElementById('summary-savings').textContent = d.school_savings + '%';
+      document.getElementById('summary-tree').textContent    = d.tree_level + '/5';
+    })
+    .catch(() => {});
+}
+
+// ── Авто-скрыть flash-сообщения через 4 сек ─────────────
+document.querySelectorAll('.flash-message').forEach(el => {
+  setTimeout(() => {
+    el.style.transition = 'opacity 0.5s, transform 0.5s';
+    el.style.opacity    = '0';
+    el.style.transform  = 'translateY(-8px)';
+    setTimeout(() => el.remove(), 500);
+  }, 4000);
+});
+</script>
+{% endblock %}

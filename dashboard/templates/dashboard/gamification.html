@@ -52,7 +52,7 @@
           font-weight: 600;
           color: var(--text);
           text-align: center;
-        ">{{ c.name }}</div>
+        ">{{ c.class_name }}</div>
 
         <!-- Прогресс-бар экономии -->
         <div>
@@ -61,8 +61,8 @@
             <div style="
               position: absolute; left: 0; top: 0; bottom: 0;
               background: {% if forloop.counter == 1 %}var(--accent){% elif forloop.counter == 2 %}#0099ff{% else %}var(--muted){% endif %};
-              width: {{ c.savings|floatformat:0 }}%;
-              max-width: {% if c.savings > 0 %}100{% else %}0{% endif %}%;
+              width: {{ c.savings_percent|floatformat:0 }}%;
+              max-width: {% if c.savings_percent > 0 %}100{% else %}0{% endif %}%;
               transition: width 1.2s ease {{ forloop.counter|add:"-1" }}00ms;
             "></div>
           </div>
@@ -70,26 +70,26 @@
 
         <!-- Процент -->
         <div style="text-align: right;">
-          {% if c.savings > 0 %}
+          {% if c.savings_percent > 0 %}
           <span style="
             font-family: var(--display);
             font-size: 20px;
             font-weight: 900;
             color: var(--accent);
-          ">−{{ c.savings }}%</span>
+          ">−{{ c.savings_percent }}%</span>
           {% else %}
           <span style="font-family: var(--display); font-size: 18px; font-weight: 600; color: var(--danger);">
-            +{{ c.savings|floatformat:1|slice:"1:" }}%
+            +{{ c.savings_percent|floatformat:1|slice:"1:" }}%
           </span>
           {% endif %}
         </div>
 
         <!-- Деревья -->
         <div style="text-align: right; font-size: 12px; color: var(--muted);">
-          {% for t in c.trees|default:0|stringformat:"d" %}{% endfor %}
-          {% if c.trees > 0 %}
-            <span title="{{ c.trees }} деревьев посажено" style="font-size: 14px;">
-              {% for i in "123456789" %}{% if forloop.counter <= c.trees %}🌱{% endif %}{% endfor %}
+          {% for t in c.trees_saved|default:0|stringformat:"d" %}{% endfor %}
+          {% if c.trees_saved > 0 %}
+            <span title="{{ c.trees_saved }} деревьев посажено" style="font-size: 14px;">
+              {% for i in "123456789" %}{% if forloop.counter <= c.trees_saved %}🌱{% endif %}{% endfor %}
             </span>
           {% else %}
             <span style="font-size: 10px;">—</span>
